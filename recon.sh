@@ -375,11 +375,20 @@ function cleanup {
     rm -f $DIR/$1/1* $DIR/$1/2* $DIR/$1/3* $DIR/$1/4* $DIR/$1/5* $DIR/$1/6* $DIR/$1/7* $DIR/$1/8* $DIR/$1/9*
 }
 
+function sanity_checks {
+    ping -qc1 $1 &>/dev/null && echo -e "${GREEN}[+] Host is pingable!${NC}"
+    if [ "$?" -eq 1 ]; then
+        echo -e "${RED}[-] Host seems to be down${NC}"
+        exit 1
+    fi
+}
+
 if [ ${OPTIND} -eq 5 ]; then
     if [ ! -d "$DIR" ]; then
         mkdir -p "$DIR"
     else
         while read p; do
+            sanity_checks $p
             rm -rf $p
             mkdir -p "$DIR/$p"
             nmap_scan $p
