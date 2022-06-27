@@ -31,7 +31,7 @@ while getopts ':d:f:' OPTION; do
             FILE="$OPTARG"
             ;;
         \?)
-            echo -e "${RED}[!] USAGE: $(basename $0) [-d DIRECTORY] [-f FILE containing IP's]${NC}"
+            print_usage
             exit 1
             ;;
     esac
@@ -383,6 +383,13 @@ function sanity_checks {
     fi
 }
 
+function print_usage {
+    echo -e "${RED}[!] USAGE: $(basename $0) [-d DIRECTORY] [-f FILE] [-n]${NC}"
+    echo -e "${RED}[!]  -d   Specifies output directory${NC}"
+    echo -e "${RED}[!]  -f   Specifies input file containing list of IPs${NC}"
+    echo -e "${RED}[!]  -n   Specifies to not check whether target is alive using ping${NC}"
+}
+
 if [ ${OPTIND} -eq 5 ]; then
     if [ ! -d "$DIR" ]; then
         mkdir -p "$DIR"
@@ -397,5 +404,5 @@ if [ ${OPTIND} -eq 5 ]; then
         echo "============================DONE============================="
     fi
 else
-    echo -e "${RED}[!] USAGE: $(basename $0) [-d DIRECTORY] [-f FILE containing IP's]${NC}"
+    print_usage
 fi
