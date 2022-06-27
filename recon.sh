@@ -5,8 +5,8 @@ set -e
 set -o pipefail
 
 declare  DIR
-declare  HOST
 declare  FILE
+declare  NOPING=false
 
 RED='\e[91m'
 GREEN='\e[32m'
@@ -21,7 +21,8 @@ _  __  / / /_/ /_  / / / /_ /  __/  /
                                     "
 echo ""
 
-while getopts ':d:f:' OPTION; do
+argc="$#"
+while getopts ':d:f:n' OPTION; do
     case ${OPTION} in
         d)
             #Using sed to make sure the / at the end is removed, just in case user puts in !
@@ -30,13 +31,15 @@ while getopts ':d:f:' OPTION; do
         f)
             FILE="$OPTARG"
             ;;
+        n)
+            NOPING=true
+            ;;
         \?)
             print_usage
             exit 1
             ;;
     esac
 done
-shift "$(($OPTIND -1))"
 
 function nmap_scan {
     echo  -e "${BLUE}[*] Nmap TCP scan initiated${NC}"
@@ -375,7 +378,7 @@ function cleanup {
     rm -f $DIR/$1/1* $DIR/$1/2* $DIR/$1/3* $DIR/$1/4* $DIR/$1/5* $DIR/$1/6* $DIR/$1/7* $DIR/$1/8* $DIR/$1/9*
 }
 
-function sanity_checks {
+function ping_check {
     ping -qc1 $1 &>/dev/null && echo -e "${GREEN}[+] Host is pingable!${NC}"
     if [ "$?" -eq 1 ]; then
         echo -e "${RED}[-] Host seems to be down${NC}"
@@ -390,12 +393,12 @@ function print_usage {
     echo -e "${RED}[!]  -n   Specifies to not check whether target is alive using ping${NC}"
 }
 
-if [ ${OPTIND} -eq 5 ]; then
+if [ $argc -ge 4 ]; then
     if [ ! -d "$DIR" ]; then
         mkdir -p "$DIR"
     else
         while read p; do
-            sanity_checks $p
+            [ "$NOPING" = false ] && ping_check $p
             rm -rf $p
             mkdir -p "$DIR/$p"
             nmap_scan $p
