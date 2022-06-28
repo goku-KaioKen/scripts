@@ -5,23 +5,24 @@ set -e
 set -o pipefail
 
 declare  DIR
-declare  HOST
 declare  FILE
+declare  NOPING=false
 
 RED='\e[91m'
 GREEN='\e[32m'
 BLUE='\e[34m'
 NC='\e[0m'
 
-echo "______  __             _____             
+echo "______  __             _____
 ___  / / /___  __________  /_____________
 __  /_/ /_  / / /_  __ \  __/  _ \_  ___/
-_  __  / / /_/ /_  / / / /_ /  __/  /    
-/_/ /_/  \__,_/ /_/ /_/\__/ \___//_/     
+_  __  / / /_/ /_  / / / /_ /  __/  /
+/_/ /_/  \__,_/ /_/ /_/\__/ \___//_/
                                     "
 echo ""
 
-while getopts ':d:f:' OPTION; do
+argc="$#"
+while getopts ':d:f:n' OPTION; do
     case ${OPTION} in
         d)
             #Using sed to make sure the / at the end is removed, just in case user puts in !
@@ -30,13 +31,15 @@ while getopts ':d:f:' OPTION; do
         f)
             FILE="$OPTARG"
             ;;
-        \?) 
-            echo -e "${RED}[!] USAGE: $(basename $0) [-d DIRECTORY] [-f FILE containing IP's]${NC}"
+        n)
+            NOPING=true
+            ;;
+        \?)
+            print_usage
             exit 1
             ;;
     esac
 done
-shift "$(($OPTIND -1))"
 
 function nmap_scan {
     echo  -e "${BLUE}[*] Nmap TCP scan initiated${NC}"
@@ -46,7 +49,7 @@ function nmap_scan {
     wait
     echo  -e "${GREEN}[+] Nmap TCP scan completed${NC}"
     echo  -e "${GREEN}[+] Nmap UDP scan completed${NC}"
-    
+
     if [ -f "$DIR/$1/out" ]; then
     #get the ports
         ports=($(egrep -v "^#|Status: Up" "$DIR/$1/out" | cut -d' ' -f4- | sed -e 's/Ignored.*//p' | tr ',' '\n' | sed -e 's/^[ \t]*//' | sort -n | uniq | grep -iv "closed" | cut -d'/' -f1))
@@ -56,7 +59,7 @@ function nmap_scan {
 
     if [ -f "$DIR/$1/out" ] && [ -f "$DIR/$1/out_udp" ]; then
         ps=($(egrep -v "^#|Status: Up" "$DIR/$1/out" "$DIR/$1/out_udp" | cut -d' ' -f4- | sed -e 's/Ignored.*//p' | tr ',' '\n' | sed -e 's/^[ \t]*//' | sort -n | uniq | grep -iv "closed"))
-    
+
         for ps in "${ps[@]}"; do
             ports=($(echo $ps | awk -F '/' '{print $1}'))
             services=($(echo $ps | awk -F '/' '{print $5}'))
@@ -306,13 +309,13 @@ function sip_enum {
 
 function smb_enum {
     echo  -e "${BLUE}[*] SMB scan initiated${NC}"
-    nmap -sV -Pn -T4 -n  -p $1 --script="banner,(nbstat or smb* or ssl*) and not (brute or broadcast or dos or external or fuzzer)" --script-args=unsafe=1 --append-output -oN "$DIR/$2/smb_enum_nmap" -vv $2 >/dev/null 
+    nmap -sV -Pn -T4 -n  -p $1 --script="banner,(nbstat or smb* or ssl*) and not (brute or broadcast or dos or external or fuzzer)" --script-args=unsafe=1 --append-output -oN "$DIR/$2/smb_enum_nmap" -vv $2 >/dev/null
     echo  -e "${GREEN}[+] SMB scan completed${NC}"
     echo -e "${BLUE}[*] Running nbtscan${NC}"
     nbtscan -rvh $2 >> "$DIR/$2/nbtscan"
     echo -e "${GREEN}[+] nbtscan completed${NC}"
     echo  -e "${BLUE}[*] Trying to enumerate SMB shares${NC}"
-    smbmap -H $2 >> "$DIR/$2/smbmap" 
+    smbmap -H $2 >> "$DIR/$2/smbmap"
     smbclient -L\\ -N -I $2 > "$DIR/$2/smbclient"
     echo  -e "${GREEN}[+] SMB shares enum completed${NC}"
     echo  -e "${BLUE}[*] Running enum4linux${NC}"
@@ -375,7 +378,7 @@ function cleanup {
     rm -f $DIR/$1/1* $DIR/$1/2* $DIR/$1/3* $DIR/$1/4* $DIR/$1/5* $DIR/$1/6* $DIR/$1/7* $DIR/$1/8* $DIR/$1/9*
 }
 
-function sanity_checks {
+function ping_check {
     ping -qc1 $1 &>/dev/null && echo -e "${GREEN}[+] Host is pingable!${NC}"
     if [ "$?" -eq 1 ]; then
         echo -e "${RED}[-] Host seems to be down${NC}"
@@ -383,19 +386,26 @@ function sanity_checks {
     fi
 }
 
-if [ ${OPTIND} -eq 5 ]; then
+function print_usage {
+    echo -e "${RED}[!] USAGE: $(basename $0) [-d DIRECTORY] [-f FILE] [-n]${NC}"
+    echo -e "${RED}[!]  -d   Specifies output directory${NC}"
+    echo -e "${RED}[!]  -f   Specifies input file containing list of IPs${NC}"
+    echo -e "${RED}[!]  -n   Specifies to not check whether target is alive using ping${NC}"
+}
+
+if [ $argc -ge 4 ]; then
     if [ ! -d "$DIR" ]; then
         mkdir -p "$DIR"
     else
         while read p; do
-            sanity_checks $p
+            [ "$NOPING" = false ] && ping_check $p
             rm -rf $p
             mkdir -p "$DIR/$p"
             nmap_scan $p
         done <  $FILE
-        wait 
+        wait
         echo "============================DONE============================="
     fi
 else
-    echo -e "${RED}[!] USAGE: $(basename $0) [-d DIRECTORY] [-f FILE containing IP's]${NC}"
+    print_usage
 fi
