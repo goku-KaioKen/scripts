@@ -21,25 +21,29 @@ _  __  / / /_/ /_  / / / /_ /  __/  /
                                     "
 echo ""
 
-argc="$#"
-while getopts ':d:f:n' OPTION; do
-    case ${OPTION} in
-        d)
-            #Using sed to make sure the / at the end is removed, just in case user puts in !
-            DIR="$(echo $OPTARG | sed -e 's/\/$//g')"
-            ;;
-        f)
-            FILE="$OPTARG"
-            ;;
-        n)
-            NOPING=true
-            ;;
-        \?)
-            print_usage
-            exit 1
-            ;;
-    esac
-done
+function parse_args {
+    while [ "${1:-}" != "" ]; do
+        case "$1" in
+            "-d" | "--directory")
+                shift
+                #Using sed to make sure the / at the end is removed, just in case user puts in !
+                [ -z "${1:+x}" ] && print_usage || DIR="$(echo $1 | sed -e 's/\/$//g')"
+                ;;
+            "-f" | "--file")
+                shift
+                [ -z "${1:+x}" ] && print_usage || FILE="$1"
+                ;;
+            "-n" | "--noping")
+                NOPING=true
+                ;;
+            *)
+                print_usage
+                exit 1
+                ;;
+        esac
+        shift
+    done
+}
 
 function nmap_scan {
     echo  -e "${BLUE}[*] Nmap TCP scan initiated${NC}"
@@ -388,24 +392,23 @@ function ping_check {
 
 function print_usage {
     echo -e "${RED}[!] USAGE: $(basename $0) [-d DIRECTORY] [-f FILE] [-n]${NC}"
-    echo -e "${RED}[!]  -d   Specifies output directory${NC}"
-    echo -e "${RED}[!]  -f   Specifies input file containing list of IPs${NC}"
-    echo -e "${RED}[!]  -n   Specifies to not check whether target is alive using ping${NC}"
+    echo -e "${RED}[!]  -d | --directory    Specifies output directory${NC}"
+    echo -e "${RED}[!]  -f | --file         Specifies input file containing list of IPs${NC}"
+    echo -e "${RED}[!]  -n | --noping       Specifies to not check whether target is alive using ping${NC}"
 }
 
-if [ $argc -ge 4 ]; then
-    if [ ! -d "$DIR" ]; then
-        mkdir -p "$DIR"
-    else
-        while read p; do
-            [ "$NOPING" = false ] && ping_check $p
-            rm -rf $p
-            mkdir -p "$DIR/$p"
-            nmap_scan $p
-        done <  $FILE
-        wait
-        echo "============================DONE============================="
-    fi
+parse_args "$@"
+if [ ! -z "${DIR:+x}" ] && [ ! -z "${FILE:+x}" ]; then
+    [ ! -d "$DIR" ] && mkdir -p "$DIR"
+
+    while read p; do
+        [ "$NOPING" = false ] && ping_check $p
+        rm -rf $p
+        mkdir -p "$DIR/$p"
+        nmap_scan $p
+    done <  $FILE
+    wait
+    echo "============================DONE============================="
 else
     print_usage
 fi
